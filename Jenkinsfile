@@ -23,13 +23,15 @@ pipeline {
                     echo 'Running SonarQube analysis...'
 
                     withSonarQubeEnv('SonarQube') {
-                        sh '''
-                            sonar-scanner \
+                        script {
+                            def scannerHome = tool 'sonar-scanner' 
+                            sh """
+                            ${scannerHome}/bin/sonar-scanner \
                                 -Dsonar.projectKey=python-code-disasters \
                                 -Dsonar.sources=. \
-                                -Dsonar.host.url=${SONARQUBE_URL} \
                                 -Dsonar.python.version=3.8,3.9,3.10
-                        '''
+                            """
+                        }
                     }
                 }
             }
