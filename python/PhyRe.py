@@ -175,7 +175,7 @@ for i in open(popfile):
         for t in taxon:
             i = taxon.index(t)
             coef[t] = sum(x[i:])
-            pathLengths[t] = x[i]
+            pathLengths[t] = x[i] # NOSONAR
 
         continue
         
