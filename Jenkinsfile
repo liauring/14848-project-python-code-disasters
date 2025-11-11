@@ -136,7 +136,7 @@ pipeline {
                     }
                 }
             }
-            }
+        }
     }
 
     post {
