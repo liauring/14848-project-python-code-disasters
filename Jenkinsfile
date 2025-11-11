@@ -6,7 +6,7 @@ pipeline {
         CLUSTER_NAME = 'hadoop-cluster'
         REGION = 'us-central1'
         GCS_BUCKET = 'hadoop-cluster-gcs'
-        SONARQUBE_URL = 'http://34.70.75.17:9000/'
+        SONARQUBE_URL = 'http://34.70.75.17:9000'
     }
 
     stages {
@@ -71,8 +71,13 @@ pipeline {
         }
 
         stage('Deploy to Hadoop') {
+            agent {
+                docker {
+                    image 'gcr.io/google.com/cloudsdktool/google-cloud-cli:latest'
+                }
+            }
             when {
-                expression { env.BLOCKER_COUNT == '0' }
+                expression { env.QUALITY_GATE_STATUS == 'OK' || env.BLOCKER_COUNT == '0' }
             }
             steps {
                 script {
