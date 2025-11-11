@@ -16,4 +16,4 @@ def unsafe_command(user_input):
 
 # Hardcoded credentials (blocker)
 PASSWORD = "admin123"
-API_KEY = "sk-1234567890abcdef"
+AWS_KEY = "sk-1234567890abcdef"
