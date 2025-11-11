@@ -44,22 +44,27 @@ pipeline {
                 sleep(time: 10, unit: 'SECONDS')
 
                 withSonarQubeEnv('SonarQube') {
-                    def resp = httpRequest(
-                    httpMode: 'GET',
-                    url: "${env.SONAR_HOST_URL}/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false",
-                    acceptType: 'APPLICATION_JSON',
-                    customHeaders: [[name: 'Authorization', value: "Bearer ${env.SONAR_AUTH_TOKEN}"]],
-                    validResponseCodes: '200'
-                    )
+                    def blockerCount = sh(
+                    label: 'Query Sonar API for BLOCKER count',
+                    returnStdout: true,
+                    script: '''
+                        set -euo pipefail
+                        resp="$(curl -sf -H "Authorization: Bearer $SONAR_AUTH_TOKEN" \
+                        "$SONAR_HOST_URL/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false")"
 
-                    def json = readJSON text: resp.content
-                    def blockers = (json.total ?: 0) as Integer
+                        echo "$resp" | sed -n 's/.*"total"[[:space:]]*:[[:space:]]*\\([0-9]\\+\\).*/\\1/p' | head -1
+                    '''
+                    ).trim()
 
-                    echo "Blocker issues: ${blockers}"
-                    env.BLOCKER_COUNT = blockers.toString()
+                    if (!blockerCount) {
+                    error "Failed to parse 'total' from SonarQube response. Stop."
+                    }
 
-                    if (blockers > 0) {
-                    error "Found ${blockers} blocker issue(s). Stop."
+                    echo "Blocker issues: ${blockerCount}"
+                    env.BLOCKER_COUNT = blockerCount
+
+                    if (blockerCount.toInteger() > 0) {
+                    error "Found ${blockerCount} blocker issue(s). Stop."
                     } else {
                     echo "No blocker issues found. Proceeding to Hadoop deployment..."
                     }
