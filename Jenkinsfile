@@ -78,74 +78,65 @@ pipeline {
                 script {
                     echo "No blocker issues found. Deploying to Hadoop..."
 
-                    withCredentials([file(credentialsId: 'gcp-credentials', variable: 'GCP_KEY')]) {
-                        // Authenticate with GCP
-                        sh """
-                            gcloud auth activate-service-account --key-file=\${GCP_KEY}
-                            gcloud config set project courseproject-473823
-                        """
+                    withEnv(["PATH=${env.WORKSPACE}/google-cloud-sdk/bin:${env.PATH}"]) {
+                        withCredentials([file(credentialsId: 'gcp-credentials', variable: 'GCP_KEY')]) {
+                            sh '''
+                                set -euo pipefail
 
-                        // Upload the Python script to GCS
-                        echo "Uploading PySpark script to GCS..."
-                        sh """
-                            gsutil cp count_lines.py gs://${GCS_BUCKET}/scripts/
-                        """
+                                if ! command -v gcloud >/dev/null 2>&1; then
+                                echo "Installing Google Cloud SDK locally in workspace..."
+                                GCLOUD_VERSION=481.0.0
+                                curl -sSLO "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${GCLOUD_VERSION}-linux-x86_64.tar.gz"
+                                tar -xzf "google-cloud-cli-${GCLOUD_VERSION}-linux-x86_64.tar.gz"
+                                ./google-cloud-sdk/install.sh \
+                                    --quiet \
+                                    --usage-reporting=false \
+                                    --path-update=false \
+                                    --command-completion=false \
+                                    --additional-components=gsutil || true
+                                fi
 
-                        // Ensure input data exists
-                        echo "Checking for input data in GCS..."
-                        sh """
-                            gsutil ls gs://${GCS_BUCKET}/input/ || echo "Warning: No input files found"
-                        """
+                                gcloud --version
+                                gsutil --version
 
-                        // Clean up old output
-                        echo "Cleaning up old output..."
-                        sh """
-                            gsutil rm -rf gs://${GCS_BUCKET}/output/ || true
-                        """
+                                gcloud auth activate-service-account --key-file="${GCP_KEY}"
+                                gcloud config set project "${PROJECT_ID}"
 
-                        // Submit Hadoop job to Dataproc
-                        echo "Submitting PySpark job to Dataproc Hadoop cluster..."
-                        def jobOutput = sh(
-                            script: """
+                                echo "Uploading PySpark script to GCS..."
+                                gsutil cp count_lines.py "gs://${GCS_BUCKET}/scripts/"
+
+                                echo "Checking for input data in GCS..."
+                                gsutil ls "gs://${GCS_BUCKET}/input/" || echo "Warning: No input files found"
+
+                                echo "Cleaning up old output..."
+                                gsutil rm -rf "gs://${GCS_BUCKET}/output/" || true
+
+                                echo "Submitting PySpark job to Dataproc Hadoop cluster..."
                                 gcloud dataproc jobs submit pyspark \
-                                    gs://${GCS_BUCKET}/scripts/count_lines.py \
-                                    --cluster=${CLUSTER_NAME} \
-                                    --region=${REGION} \
-                                    --project=${PROJECT_ID} \
-                                    -- gs://${GCS_BUCKET}/input/*.py gs://${GCS_BUCKET}/output/
-                            """,
-                            returnStdout: true
-                        )
+                                "gs://${GCS_BUCKET}/scripts/count_lines.py" \
+                                --cluster="${CLUSTER_NAME}" \
+                                --region="${REGION}" \
+                                --project="${PROJECT_ID}" \
+                                -- "gs://${GCS_BUCKET}/input/*.py" "gs://${GCS_BUCKET}/output/"
 
-                        echo "Job submission output:"
-                        echo jobOutput
+                                echo "Waiting briefly for job output..."
+                                sleep 5
 
-                        // Wait a moment for output to be written
-                        sleep(time: 5, unit: 'SECONDS')
+                                echo "============================================================"
+                                echo "FETCHING HADOOP JOB RESULTS FROM GCS..."
+                                echo "============================================================"
+                                gsutil cat "gs://${GCS_BUCKET}/output/part-*" 2>/dev/null || echo "No results found"
 
-                        // Display the results
-                        echo "\n" + "="*60
-                        echo "FETCHING HADOOP JOB RESULTS FROM GCS..."
-                        echo "="*60 + "\n"
-
-                        def results = sh(
-                            script: "gsutil cat gs://${GCS_BUCKET}/output/part-* 2>/dev/null || echo 'No results found'",
-                            returnStdout: true
-                        ).trim()
-
-                        echo "\n" + "="*60
-                        echo "HADOOP JOB OUTPUT - LINE COUNT RESULTS"
-                        echo "="*60
-                        echo results
-                        echo "="*60
-
-                        echo "\nResults stored at: gs://${GCS_BUCKET}/output/"
-                        echo "View all output files:"
-                        sh "gsutil ls gs://${GCS_BUCKET}/output/"
+                                echo ""
+                                echo "Results stored at: gs://${GCS_BUCKET}/output/"
+                                echo "All output files:"
+                                gsutil ls "gs://${GCS_BUCKET}/output/"
+                            '''
+                        }
                     }
                 }
             }
-        }
+            }
     }
 
     post {
