@@ -40,37 +40,36 @@ pipeline {
         stage('Check for Blockers') {
             steps {
                 script {
-                    echo 'Checking SonarQube for blocker issues...'
+                echo 'Checking SonarQube for blocker issues...'
+                sleep(time: 10, unit: 'SECONDS')
 
-                    sleep(time: 10, unit: 'SECONDS')
+                // 用 SonarQube 插件提供的環境變數：SONAR_HOST_URL、SONAR_AUTH_TOKEN
+                withSonarQubeEnv('SonarQube') {
+                    def blockers = sh(
+                    label: 'Query Sonar API for BLOCKER count',
+                    returnStdout: true,
+                    script: '''
+                        set -euo pipefail
+                        curl -sf -H "Authorization: Bearer $SONAR_AUTH_TOKEN" \
+                        "$SONAR_HOST_URL/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false" \
+                        | python3 -c "import sys,json; print(json.load(sys.stdin)['total'])"
+                    '''
+                    ).trim()
 
-                    withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
-                        def response = sh(
-                            script: """
-                                curl -u \${SONAR_TOKEN}: \
-                                '${SONARQUBE_URL}/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false'
-                            """,
-                            returnStdout: true
-                        ).trim()
-
-                        def blockerCount = sh(
-                            script: "echo '${response}' | grep -o '\"total\":[0-9]*' | head -1 | cut -d':' -f2",
-                            returnStdout: true
-                        ).trim()
-
-                        env.BLOCKER_COUNT = blockerCount
-
-                        echo "Blocker issues found: ${blockerCount}"
-
-                        if (blockerCount.toInteger() > 0) {
-                            error("Build failed: ${blockerCount} blocker issue(s) found. Fix them before deploying to Hadoop.")
-                        } else {
-                            echo "No blocker issues found. Proceeding to Hadoop deployment..."
-                        }
+                    echo "Blocker issues: ${blockers}"
+                    if (!blockers.isInteger()) {
+                    error "Sonar API did not return a numeric 'total' (got: '${blockers}')."
+                    }
+                    env.BLOCKER_COUNT = blockers
+                    if (blockers.toInteger() > 0) {
+                    error "Found ${blockers} blocker issue(s). Stop."
+                    } else {
+                    echo "No blocker issues found. Proceeding to Hadoop deployment..."
                     }
                 }
+                }
             }
-        }
+            }
 
         stage('Deploy to Hadoop') {
             when {
