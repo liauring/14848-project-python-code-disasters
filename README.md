@@ -26,3 +26,4 @@ It is still not clear to me, how to structure this project.
 ### Keywords
 Pythod bad code examples, Python antipatterns 
 # Clean code comment
+# Clean code comment
