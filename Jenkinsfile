@@ -36,33 +36,59 @@ pipeline {
             }
         }
 
+        // stage('Check for Blockers') {
+        //     steps {
+        //         script {
+        //             echo 'Checking SonarQube for blocker issues...'
+        //             sleep(time: 10, unit: 'SECONDS')
+
+        //             withSonarQubeEnv('SonarQube') {
+                        
+        //                 def resp = sh(
+        //                 script: """curl -sf -H 'Authorization: Bearer ${env.SONAR_AUTH_TOKEN}' \
+        //                     "${env.SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=python-code-disasters" """,
+        //                 returnStdout: true
+        //                 ).trim()
+
+        //                 def qgStatus = sh(
+        //                 script: "printf '%s' '${resp}' | sed -n 's/.*\"status\"[[:space:]]*:[[:space:]]*\"\\([A-Z]*\\)\".*/\\1/p'",
+        //                 returnStdout: true
+        //                 ).trim()
+
+        //                 echo "Quality Gate status: ${qgStatus}"
+
+        //                 env.BLOCKER_COUNT = (qgStatus == 'OK') ? '0' : '1'
+
+        //                 if (qgStatus != 'OK') {
+        //                 error('Build failed: Quality Gate is not OK. See SonarQube dashboard for details.')
+        //                 } else {
+        //                 echo 'Quality Gate OK. Proceeding to Hadoop deployment...'
+        //                 }
+        //             }
+
+        //             timeout(time: 10, unit: 'MINUTES') {
+        //                 def qg = waitForQualityGate()
+        //                 if (qg.status != 'OK') {
+        //                     error "Quality Gate failure: ${qg.status}"
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
         stage('Check for Blockers') {
             steps {
                 script {
-                    echo 'Checking SonarQube for blocker issues...'
-                    sleep(time: 10, unit: 'SECONDS')
+                    echo 'Checking SonarQube Quality Gate result...'
 
-                    withSonarQubeEnv('SonarQube') {
-                        
-                        def resp = sh(
-                        script: """curl -sf -H 'Authorization: Bearer ${env.SONAR_AUTH_TOKEN}' \
-                            "${env.SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=python-code-disasters" """,
-                        returnStdout: true
-                        ).trim()
+                    // 等待 SonarQube 後端完成分析 (CE Task)
+                    timeout(time: 10, unit: 'MINUTES') {
+                        def qg = waitForQualityGate()   // 自動使用 SonarQube Webhook or Polling
+                        echo "Quality Gate status: ${qg.status}"
 
-                        def qgStatus = sh(
-                        script: "printf '%s' '${resp}' | sed -n 's/.*\"status\"[[:space:]]*:[[:space:]]*\"\\([A-Z]*\\)\".*/\\1/p'",
-                        returnStdout: true
-                        ).trim()
-
-                        echo "Quality Gate status: ${qgStatus}"
-
-                        env.BLOCKER_COUNT = (qgStatus == 'OK') ? '0' : '1'
-
-                        if (qgStatus != 'OK') {
-                        error('Build failed: Quality Gate is not OK. See SonarQube dashboard for details.')
+                        if (qg.status != 'OK') {
+                            error "Build failed: Quality Gate status is ${qg.status}. See SonarQube for details."
                         } else {
-                        echo 'Quality Gate OK. Proceeding to Hadoop deployment...'
+                            echo "Quality Gate passed. Proceeding to Hadoop deployment..."
                         }
                     }
                 }
