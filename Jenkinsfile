@@ -43,25 +43,25 @@ pipeline {
                 echo 'Checking SonarQube for blocker issues...'
                 sleep(time: 10, unit: 'SECONDS')
 
-                // 用 SonarQube 插件提供的環境變數：SONAR_HOST_URL、SONAR_AUTH_TOKEN
                 withSonarQubeEnv('SonarQube') {
-                    def blockers = sh(
-                    label: 'Query Sonar API for BLOCKER count',
+                    def resp = sh(
                     returnStdout: true,
+                    label: 'Query Sonar API (BLOCKER count)',
                     script: '''
-                        set -euo pipefail
-                        curl -sf -H "Authorization: Bearer $SONAR_AUTH_TOKEN" \
-                        "$SONAR_HOST_URL/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false" \
-                        | python3 -c "import sys,json; print(json.load(sys.stdin)['total'])"
+                        set -e
+                        curl -sf \
+                        -H "Authorization: Bearer $SONAR_AUTH_TOKEN" \
+                        "$SONAR_HOST_URL/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false"
                     '''
                     ).trim()
 
+                    def json = new groovy.json.JsonSlurperClassic().parseText(resp)
+                    def blockers = (json.total ?: 0) as Integer
+
                     echo "Blocker issues: ${blockers}"
-                    if (!blockers.isInteger()) {
-                    error "Sonar API did not return a numeric 'total' (got: '${blockers}')."
-                    }
-                    env.BLOCKER_COUNT = blockers
-                    if (blockers.toInteger() > 0) {
+                    env.BLOCKER_COUNT = blockers.toString()
+
+                    if (blockers > 0) {
                     error "Found ${blockers} blocker issue(s). Stop."
                     } else {
                     echo "No blocker issues found. Proceeding to Hadoop deployment..."
@@ -69,7 +69,7 @@ pipeline {
                 }
                 }
             }
-            }
+        }
 
         stage('Deploy to Hadoop') {
             when {
