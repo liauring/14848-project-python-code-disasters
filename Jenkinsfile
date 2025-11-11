@@ -44,25 +44,26 @@ pipeline {
                     sleep(time: 10, unit: 'SECONDS')
 
                     withSonarQubeEnv('SonarQube') {
-                        def blockerCount = sh(
-                            script: '''
-                                set -euo pipefail
-                                resp=$(curl -sf -H "Authorization: Bearer ${SONAR_AUTH_TOKEN}" \
-                                    "${SONAR_HOST_URL}/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false")
-                               
-                                echo "$resp" | sed -n 's/.*"total"[[:space:]]*:[[:space:]]*\\([0-9]\\+\\).*/\\1/p' | head -1
-                            ''',
-                            returnStdout: true
+                        
+                        def resp = sh(
+                        script: """curl -sf -H 'Authorization: Bearer ${env.SONAR_AUTH_TOKEN}' \
+                            '${env.SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=python-code-disasters'""",
+                        returnStdout: true
                         ).trim()
 
-                        if (!blockerCount) { blockerCount = '0' }
-                        env.BLOCKER_COUNT = blockerCount
-                        echo "Blocker issues found: ${blockerCount}"
+                        def qgStatus = sh(
+                        script: "echo '${resp}' | sed -n 's/.*\"status\"[[:space:]]*:[[:space:]]*\"\\([A-Z]*\\)\".*/\\1/p'",
+                        returnStdout: true
+                        ).trim()
 
-                        if (blockerCount.toInteger() > 0) {
-                            error("Build failed: ${blockerCount} blocker issue(s) found. Fix them before deploying to Hadoop.")
+                        echo "Quality Gate status: ${qgStatus}"
+
+                        env.BLOCKER_COUNT = (qgStatus == 'OK') ? '0' : '1'
+
+                        if (qgStatus != 'OK') {
+                        error('Build failed: Quality Gate is not OK. See SonarQube dashboard for details.')
                         } else {
-                            echo "No blocker issues found. Proceeding to Hadoop deployment..."
+                        echo 'Quality Gate OK. Proceeding to Hadoop deployment...'
                         }
                     }
                 }
