@@ -71,11 +71,6 @@ pipeline {
         }
 
         stage('Deploy to Hadoop') {
-            agent {
-                docker {
-                    image 'gcr.io/google.com/cloudsdktool/google-cloud-cli:latest'
-                }
-            }
             when {
                 expression { env.QUALITY_GATE_STATUS == 'OK' || env.BLOCKER_COUNT == '0' }
             }
