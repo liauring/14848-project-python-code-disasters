@@ -81,16 +81,16 @@ pipeline {
                     echo 'Checking SonarQube Quality Gate result...'
 
                     // 等待 SonarQube 後端完成分析 (CE Task)
-                    timeout(time: 10, unit: 'MINUTES') {
-                        def qg = waitForQualityGate()   // 自動使用 SonarQube Webhook or Polling
-                        echo "Quality Gate status: ${qg.status}"
+                    sleep(time: 10, unit: 'SECONDS')
+                    def qg = waitForQualityGate()   // 自動使用 SonarQube Webhook or Polling
+                    echo "Quality Gate status: ${qg.status}"
 
-                        if (qg.status != 'OK') {
-                            error "Build failed: Quality Gate status is ${qg.status}. See SonarQube for details."
-                        } else {
-                            echo "Quality Gate passed. Proceeding to Hadoop deployment..."
-                        }
+                    if (qg.status != 'OK') {
+                        error "Build failed: Quality Gate status is ${qg.status}. See SonarQube for details."
+                    } else {
+                        echo "Quality Gate passed. Proceeding to Hadoop deployment..."
                     }
+                    
                 }
             }
         }
