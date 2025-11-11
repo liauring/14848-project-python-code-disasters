@@ -46,12 +46,12 @@ pipeline {
                         
                         def resp = sh(
                         script: """curl -sf -H 'Authorization: Bearer ${env.SONAR_AUTH_TOKEN}' \
-                            '${env.SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=python-code-disasters'""",
+                            "${env.SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=python-code-disasters" """,
                         returnStdout: true
                         ).trim()
 
                         def qgStatus = sh(
-                        script: "echo '${resp}' | sed -n 's/.*\"status\"[[:space:]]*:[[:space:]]*\"\\([A-Z]*\\)\".*/\\1/p'",
+                        script: "printf '%s' '${resp}' | sed -n 's/.*\"status\"[[:space:]]*:[[:space:]]*\"\\([A-Z]*\\)\".*/\\1/p'",
                         returnStdout: true
                         ).trim()
 
