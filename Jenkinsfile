@@ -44,18 +44,15 @@ pipeline {
                 sleep(time: 10, unit: 'SECONDS')
 
                 withSonarQubeEnv('SonarQube') {
-                    def resp = sh(
-                    returnStdout: true,
-                    label: 'Query Sonar API (BLOCKER count)',
-                    script: '''
-                        set -e
-                        curl -sf \
-                        -H "Authorization: Bearer $SONAR_AUTH_TOKEN" \
-                        "$SONAR_HOST_URL/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false"
-                    '''
-                    ).trim()
+                    def resp = httpRequest(
+                    httpMode: 'GET',
+                    url: "${env.SONAR_HOST_URL}/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false",
+                    acceptType: 'APPLICATION_JSON',
+                    customHeaders: [[name: 'Authorization', value: "Bearer ${env.SONAR_AUTH_TOKEN}"]],
+                    validResponseCodes: '200'
+                    )
 
-                    def json = new groovy.json.JsonSlurperClassic().parseText(resp)
+                    def json = readJSON text: resp.content
                     def blockers = (json.total ?: 0) as Integer
 
                     echo "Blocker issues: ${blockers}"
