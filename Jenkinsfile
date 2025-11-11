@@ -40,35 +40,34 @@ pipeline {
         stage('Check for Blockers') {
             steps {
                 script {
-                echo 'Checking SonarQube for blocker issues...'
-                sleep(time: 10, unit: 'SECONDS')
+                    echo 'Checking SonarQube for blocker issues...'
 
-                withSonarQubeEnv('SonarQube') {
-                    def blockerCount = sh(
-                    label: 'Query Sonar API for BLOCKER count',
-                    returnStdout: true,
-                    script: '''
-                        set -euo pipefail
-                        resp="$(curl -sf -H "Authorization: Bearer $SONAR_AUTH_TOKEN" \
-                        "$SONAR_HOST_URL/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false")"
+                    sleep(time: 10, unit: 'SECONDS')
 
-                        echo "$resp" | sed -n 's/.*"total"[[:space:]]*:[[:space:]]*\\([0-9]\\+\\).*/\\1/p' | head -1
-                    '''
-                    ).trim()
+                    withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                        def response = sh(
+                            script: """
+                                curl -u \${SONAR_TOKEN}: \
+                                '${SONARQUBE_URL}/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false'
+                            """,
+                            returnStdout: true
+                        ).trim()
 
-                    if (!blockerCount) {
-                    error "Failed to parse 'total' from SonarQube response. Stop."
+                        def blockerCount = sh(
+                            script: "echo '${response}' | grep -o '\"total\":[0-9]*' | head -1 | cut -d':' -f2",
+                            returnStdout: true
+                        ).trim()
+
+                        env.BLOCKER_COUNT = blockerCount
+
+                        echo "Blocker issues found: ${blockerCount}"
+
+                        if (blockerCount.toInteger() > 0) {
+                            error("Build failed: ${blockerCount} blocker issue(s) found. Fix them before deploying to Hadoop.")
+                        } else {
+                            echo "No blocker issues found. Proceeding to Hadoop deployment..."
+                        }
                     }
-
-                    echo "Blocker issues: ${blockerCount}"
-                    env.BLOCKER_COUNT = blockerCount
-
-                    if (blockerCount.toInteger() > 0) {
-                    error "Found ${blockerCount} blocker issue(s). Stop."
-                    } else {
-                    echo "No blocker issues found. Proceeding to Hadoop deployment..."
-                    }
-                }
                 }
             }
         }
