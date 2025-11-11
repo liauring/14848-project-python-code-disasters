@@ -41,25 +41,22 @@ pipeline {
             steps {
                 script {
                     echo 'Checking SonarQube for blocker issues...'
-
                     sleep(time: 10, unit: 'SECONDS')
 
-                    withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
-                        def response = sh(
-                            script: """
-                                curl -u \${SONAR_TOKEN}: \
-                                '${SONARQUBE_URL}/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false'
-                            """,
-                            returnStdout: true
-                        ).trim()
-
+                    withSonarQubeEnv('SonarQube') {
                         def blockerCount = sh(
-                            script: "echo '${response}' | grep -o '\"total\":[0-9]*' | head -1 | cut -d':' -f2",
+                            script: '''
+                                set -euo pipefail
+                                resp=$(curl -sf -H "Authorization: Bearer ${SONAR_AUTH_TOKEN}" \
+                                    "${SONAR_HOST_URL}/api/issues/search?componentKeys=python-code-disasters&severities=BLOCKER&resolved=false")
+                               
+                                echo "$resp" | sed -n 's/.*"total"[[:space:]]*:[[:space:]]*\\([0-9]\\+\\).*/\\1/p' | head -1
+                            ''',
                             returnStdout: true
                         ).trim()
 
+                        if (!blockerCount) { blockerCount = '0' }
                         env.BLOCKER_COUNT = blockerCount
-
                         echo "Blocker issues found: ${blockerCount}"
 
                         if (blockerCount.toInteger() > 0) {
