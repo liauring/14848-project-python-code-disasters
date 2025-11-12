@@ -6,7 +6,6 @@ pipeline {
         CLUSTER_NAME = 'hadoop-cluster'
         REGION = 'us-central1'
         GCS_BUCKET = 'hadoop-cluster-gcs'
-        SONARQUBE_URL = 'http://34.70.75.17:9000'
     }
 
     stages {
